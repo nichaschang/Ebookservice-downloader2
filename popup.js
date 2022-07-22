@@ -260,6 +260,7 @@ function downloadePub() {
     var token = myRe.exec(script)[1];
     myRe = new RegExp('bookToken: \'(.*)\'', 'g');
     var bookToken = myRe.exec(script)[1];
+    bookToken = bookToken? bookToken + "/null" : "null";
     myRe = new RegExp('format: \'(.*)\'', 'g');
     var format = myRe.exec(script)[1];
 
@@ -273,23 +274,29 @@ function downloadePub() {
         flag = false;
         alert("非電子書格式");
     }
-
+ 
     if (flag) {
         links = [];
-        links.push(rootUrl + '/epub/fetch/' + bookId + '/' + newToken + '/' + bookToken + '/META-INF/container.xml'); //add container to queue
-        var contentUrl = rootUrl + '/epub/fetch/' + bookId + '/' + newToken + '/' + bookToken + '/OEBPS/';
-        console.log(contentUrl + 'content.opf');
-        links.push(contentUrl + 'content.opf'); //add opf to queue
-        var content = httpGet(contentUrl + 'content.opf');
+        links.push(rootUrl + '/api/epub/fetch/' + bookId + '/' + newToken + '/' + bookToken + '/META-INF/container.xml'); //add container to queue
+        var content_str = rootUrl + '/api/epub/fetch/' + bookId + '/' + newToken + '/' + bookToken;
+        var objstr = go_function(content_str);
+        console.log(objstr);
+        console.log(objstr.file_name);
+        var contentUrl = content_str + objstr.root_name;
+        console.log(contentUrl);
+        links.push(contentUrl + objstr.file_name); //add opf to queue
+        console.log(contentUrl + objstr.root_name + objstr.file_name);
+        var content = httpGet(contentUrl + objstr.file_name);
         console.log(content);
         parser = new DOMParser();
         contentDoc = parser.parseFromString(content, 'text/xml');
 
-        myRe = new RegExp('<dc:title>(.*)</dc:title>', 'g');
+        myRe = new RegExp(objstr.title_name, 'g');
         var bookName = myRe.exec(content)[1];
 
         // var title = contentDoc.querySelectorAll('metadata');
         // bookName = title[0].childNodes[7].innerHTML;
+        console.log(myRe.exec(content))
         console.log(bookName);
         var items = contentDoc.querySelectorAll('item');
         //console.log(items);
@@ -360,6 +367,8 @@ function downloadLinks(link, dir, indexLocal, modeAction) {
             filename = link[indexLocal].substring(link[indexLocal].indexOf('/OEBPS/') + 1);
         } else if (link[indexLocal].indexOf('/META-INF/') >= 0) {
             filename = link[indexLocal].substring(link[indexLocal].indexOf('/META-INF/') + 1);
+        } else if (link[indexLocal].indexOf('/item/') >= 0) {
+            filename = link[indexLocal].substring(link[indexLocal].indexOf('/item/') + 1);
         }
         //var filename = link[indexLocal].split('/').pop()
         file = "" + dir + "/" + filename;
@@ -406,4 +415,31 @@ function sanitize(input, replacement) {
         .replace(windowsReservedRe, replacement)
         .replace(windowsTrailingRe, replacement);
     return sanitized;
+}
+
+function go_function(content_str){
+    var arr = [
+        {"root_name":'null/OEBPS/',"file_name":'content.opf',"title_name":'<dc:title>(.*)</dc:title>'},
+        {"root_name":'null/item/',"file_name":'standard.opf',"title_name":'<dc:title id="title">(.*)</dc:title>'}
+    ];
+    var idx = 0;
+    let status = true;
+    while(status){
+        
+        var objstr = {
+            "root_name":arr[idx].root_name,
+            "file_name":arr[idx].file_name,
+            "title_name":arr[idx].title_name
+        };
+        let link = httpGet(content_str + objstr.root_name + objstr.file_name);
+       
+        if(link){
+            return objstr;
+        }
+
+        idx++;
+
+        if(idx >= arr.length) status = false;
+    }
+
 }
